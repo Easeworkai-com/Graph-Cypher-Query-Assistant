@@ -74,7 +74,7 @@ schema = enhanced_graph.schema
 
 # Initialize LLM
 groq_llm = ChatGroq(
-    model="llama-3.2-90b-vision-preview",
+    model="llama-3.1-70b-versatile",
 )
 # co = cohere.Client('Cohere-Api-Key')
 open_llm = ChatOpenAI(model="gpt-3.5-turbo")
@@ -226,73 +226,70 @@ def generate_response(user_input, schema):
         # st.write(reformed_question)
         query_input = reformed_question if reformed_question else user_input
         
-        initial_result = None
-        if dependent_Previous_conversation == "no":
-            try:
-                initial_result = chain1.invoke(query_input)
-            except Exception as e:
-                initial_result = str(e)
-                return initial_result
-        
-        analysis_prompt = ChatPromptTemplate.from_template("""
-        Previous conversation:
-        {chat_history} 
-                                                                                                            
-        User input: {question}
-        Initial result: {initial_result}
-        Schema: {schema}
-                                                        
-        
-        Analyze the user's query and the initial result. Determine:
-        1. Check if there is any error that means cypher query was not generated correctly based on the User input to overcome this generate simple Follow-up Query which would related to the Schema and Previous conversation.  \
-        2. check if Initial result is None that means the User input can be answerd through Previous conversation in this case it would be satisfied.
-        3. Is the result satisfactory? Use the following levels:
-        - "Yes" if the Initial result is complete and directly answers the user's question or the Initial result is completely None.
-        - "No" if the Initial result is incomplete or incorrect.
-        4. If "No", identify what specific information is missing, unclear, or incorrect based on the user input, schema and Previous conversation.
-        5. Generate a follow-up query to retrieve the missing or more accurate information.
-        
-        Respond in the following format:
-        Satisfactory: [Yes/No]
-        Missing Information: [Detailed description of what's missing or needs clarification]
-        Follow-up Query: [Specific query to get additional information]
-        Reasoning: [Brief explanation of the follow-up query choice]
-        """)
+        try:
+            # initial_result = None
+            # if dependent_Previous_conversation == "no":
+            initial_result = chain1.invoke(query_input)
 
-        analysis_chain = (
-            {
-                "question": RunnablePassthrough(), 
-                "initial_result": RunnablePassthrough(), 
-                "schema": RunnablePassthrough(), 
-                "chat_history": RunnableLambda(lambda _: memory.chat_memory.messages)
-            }
-            | analysis_prompt
-            | llm_cohere
-            | StrOutputParser()
-        )
-        
-        analysis = analysis_chain.invoke({
-            "question": user_input,
-            "initial_result": initial_result["result"] if initial_result else "",
-            "schema": schema,
-        })
-        
-        print(analysis)
-        satisfaction_level = ""
-        missing_info = ""
-        follow_up_query = ""
-        
-        analysis_lines = analysis.split('\n')
-        for line in analysis_lines:
-            line = line.strip()
-            if line.startswith('Satisfactory:'):
-                satisfaction_level = line.split(': ')[1].lower()
-            elif line.startswith('Missing Information:'):
-                missing_info = line.split(': ')[1] if ': ' in line else ""
-            elif line.startswith('Follow-up Query:'):
-                follow_up_query = line.split(': ')[1] if ': ' in line else ""
+            # analysis_prompt = ChatPromptTemplate.from_template("""
+            # Previous conversation:
+            # {chat_history} 
+                                                                                                                
+            # User input: {question}
+            # Initial result: {initial_result}
+            # Schema: {schema}
+                                                            
+            
+            # Analyze the user's query and the initial result. Determine:
+            # 1. Check if there is any error that means cypher query was not generated correctly based on the User input to overcome this generate simple Follow-up Query which would related to the Schema and Previous conversation.  \
+            # 2. check if Initial result is None that means the User input can be answerd through Previous conversation in this case it would be satisfied.
+            # 3. Is the result satisfactory? Use the following levels:
+            # - "Yes" if the Initial result is complete and directly answers the user's question or the Initial result is completely None.
+            # - "No" if the Initial result is incomplete or incorrect.
+            # 4. If "No", identify what specific information is missing, unclear, or incorrect based on the user input, schema and Previous conversation.
+            # 5. Generate a follow-up query to retrieve the missing or more accurate information.
+            
+            # Respond in the following format:
+            # Satisfactory: [Yes/No]
+            # Missing Information: [Detailed description of what's missing or needs clarification]
+            # Follow-up Query: [Specific query to get additional information]
+            # Reasoning: [Brief explanation of the follow-up query choice]
+            # """)
 
-        if satisfaction_level == "yes":
+            # analysis_chain = (
+            #     {
+            #         "question": RunnablePassthrough(), 
+            #         "initial_result": RunnablePassthrough(), 
+            #         "schema": RunnablePassthrough(), 
+            #         "chat_history": RunnableLambda(lambda _: memory.chat_memory.messages)
+            #     }
+            #     | analysis_prompt
+            #     | llm_cohere
+            #     | StrOutputParser()
+            # )
+            
+            # analysis = analysis_chain.invoke({
+            #     "question": user_input,
+            #     "initial_result": initial_result["result"] if initial_result else "",
+            #     "schema": schema,
+            # })
+            
+            # print(analysis)
+            # satisfaction_level = ""
+            # missing_info = ""
+            # follow_up_query = ""
+            
+            # analysis_lines = analysis.split('\n')
+            # for line in analysis_lines:
+            #     line = line.strip()
+            #     if line.startswith('Satisfactory:'):
+            #         satisfaction_level = line.split(': ')[1].lower()
+            #     elif line.startswith('Missing Information:'):
+            #         missing_info = line.split(': ')[1] if ': ' in line else ""
+            #     elif line.startswith('Follow-up Query:'):
+            #         follow_up_query = line.split(': ')[1] if ': ' in line else ""
+
+            # if satisfaction_level:
             present_prompt = ChatPromptTemplate.from_template("""
             Previous conversation:
             {chat_history} 
@@ -333,62 +330,60 @@ def generate_response(user_input, schema):
             
             return final_result
 
-        elif satisfaction_level == "no" and follow_up_query:
-            try:
-                additional_info = chain1.invoke(follow_up_query)
-            except Exception as e:
-                additional_info = str(e)
-                return additional_info
-            
-            present_prompt = ChatPromptTemplate.from_template("""
-            Previous conversation:
-            {chat_history} 
-                                                                
-            User input: {question}
-            Initial result: {initial_result}
-            Additional information: {additional_info}
-            Schema: {schema}
-            
-            Form a comprehensive answer that:
-            - Presents only information from the Result and Additional information that is the current answer of the User input. Dont Include Previous conversation in your response
-            - Uses appropriate formatting ($,',',%,-) and tables
-            - Dont Include Schema Information in your response
-            """)
+            # elif satisfaction_level == "no" and follow_up_query:
+            #     additional_info = chain1.invoke(follow_up_query)
 
-            present_chain = (
-                {
-                    "question": RunnablePassthrough(), 
-                    "initial_result": RunnablePassthrough(), 
-                    "additional_info": RunnablePassthrough(), 
-                    "schema": RunnablePassthrough(), 
-                    "chat_history": RunnableLambda(lambda _: memory.chat_memory.messages)
-                }
-                | present_prompt
-                | llm_cohere
-                | StrOutputParser()
-            )
-            
-            final_result = present_chain.invoke({
-                "question": user_input,
-                "initial_result": initial_result["result"] if initial_result else "",
-                "additional_info": additional_info["result"],
-                "schema": schema,
-            })
-            
-            # Save the final result to memory
-            memory.save_context(
-                {"input": user_input},
-                {"output": final_result}
-            )
-            
-            return final_result
-        
-        else:
-            return "Unable to generate a satisfactory response. Please try rephrasing your question."
+                
+            #     present_prompt = ChatPromptTemplate.from_template("""
+            #     Previous conversation:
+            #     {chat_history} 
+                                                                    
+            #     User input: {question}
+            #     Initial result: {initial_result}
+            #     Additional information: {additional_info}
+            #     Schema: {schema}
+                
+            #     Form a comprehensive answer that:
+            #     - Presents only information from the Result and Additional information that is the current answer of the User input. Dont Include Previous conversation in your response
+            #     - Uses appropriate formatting ($,',',%,-) and tables
+            #     - Dont Include Schema Information in your response
+            #     """)
 
+            #     present_chain = (
+            #         {
+            #             "question": RunnablePassthrough(), 
+            #             "initial_result": RunnablePassthrough(), 
+            #             "additional_info": RunnablePassthrough(), 
+            #             "schema": RunnablePassthrough(), 
+            #             "chat_history": RunnableLambda(lambda _: memory.chat_memory.messages)
+            #         }
+            #         | present_prompt
+            #         | llm_cohere
+            #         | StrOutputParser()
+            #     )
+                
+            #     final_result = present_chain.invoke({
+            #         "question": user_input,
+            #         "initial_result": initial_result["result"] if initial_result else "",
+            #         "additional_info": additional_info["result"],
+            #         "schema": schema,
+            #     })
+                
+            #     # Save the final result to memory
+            #     memory.save_context(
+            #         {"input": user_input},
+            #         {"output": final_result}
+            #     )
+                
+            #     return final_result
+            
+            # else:
+            #     return "Unable to generate a satisfactory response. Please try rephrasing your question."
+        except Exception as e:
+            return f"An error occurred while processing your query: {str(e)}"
     else:
         return f"Sorry, the question seems insufficient. Here's what you can ask: {corrected_questions}"
-
+        
     
 
 def clear_conversation_history():
